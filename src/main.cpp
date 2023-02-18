@@ -4,12 +4,13 @@
 
 bool bPreventTogglePOVDuringReload = true;
 bool bPreventReloadAfterTogglePOV = true;
+bool bPreventSprintReloading = true;
 
 std::string GetINIOption(const char* section, const char* key) {
 	std::string	result;
 	char resultBuf[256] = { 0 };
 
-	static const std::string& configPath = "Data\\F4SE\\Plugins\\" + std::string(Version::PROJECT) + ".ini";
+	static const std::string& configPath = fmt::format(FMT_STRING("Data\\F4SE\\Plugins\\{}.ini"), Version::PROJECT);
 	GetPrivateProfileStringA(section, key, NULL, resultBuf, sizeof(resultBuf), configPath.c_str());
 	return resultBuf;
 }
@@ -24,6 +25,11 @@ void ReadINI() {
 	if (!bPreventReloadAfterTogglePOV_value.empty())
 		bPreventReloadAfterTogglePOV = std::stoul(bPreventReloadAfterTogglePOV_value);
 	logger::info(FMT_STRING("bPreventReloadAfterTogglePOV: {}"), bPreventReloadAfterTogglePOV);
+
+	std::string bPreventSprintReloading_value = GetINIOption("Settings", "bPreventSprintReloading");
+	if (!bPreventSprintReloading_value.empty())
+		bPreventSprintReloading = std::stoul(bPreventSprintReloading_value);
+	logger::info(FMT_STRING("bPreventSprintReloading: {}"), bPreventSprintReloading);
 }
 
 void OnF4SEMessage(F4SE::MessagingInterface::Message* msg) {
@@ -31,7 +37,7 @@ void OnF4SEMessage(F4SE::MessagingInterface::Message* msg) {
 	case F4SE::MessagingInterface::kNewGame:
 	case F4SE::MessagingInterface::kPreLoadGame:
 		if (bPreventTogglePOVDuringReload)
-			Hooks::ClearReloadStack();
+			Hooks::ClearVariables();
 		break;
 	}
 }
@@ -85,7 +91,7 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface * a_
 	F4SE::Init(a_f4se);
 
 	ReadINI();
-	Hooks::Install(bPreventTogglePOVDuringReload, bPreventReloadAfterTogglePOV);
+	Hooks::Install(bPreventTogglePOVDuringReload, bPreventReloadAfterTogglePOV, bPreventSprintReloading);
 
 	const F4SE::MessagingInterface* message = F4SE::GetMessagingInterface();
 	if (message)
