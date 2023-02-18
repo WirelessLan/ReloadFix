@@ -45,7 +45,6 @@ namespace Hooks {
 	uint32_t g_reloadStackSize;
 	bool g_preventSprintReloading;
 	bool g_isSprintQueued;
-	bool g_isAutoMoveSprint;
 
 	bool IsReloading() {
 		return g_reloadStackSize > 0;
@@ -54,7 +53,6 @@ namespace Hooks {
 	void ClearVariables() {
 		g_reloadStackSize = 0;
 		g_isSprintQueued = false;
-		g_isAutoMoveSprint = false;
 	}
 
 	void ReadyWeaponHandler_Hook(void* arg1, RE::ButtonEvent* event) {
@@ -63,8 +61,6 @@ namespace Hooks {
 
 			if (g_preventSprintReloading) {
 				g_isSprintQueued = true;
-				if (Utils::IsAutoMove())
-					g_isAutoMoveSprint = true;
 				Utils::ToggleSprint(false);
 			}
 		}
@@ -108,20 +104,9 @@ namespace Hooks {
 
 	void MovementHandler_Hook(void* arg1, RE::ButtonEvent* event) {
 		if (g_isSprintQueued) {
-			if (event->strUserEvent == "Forward") {
-				if (!IsReloading() && !Utils::IsSprinting()) {
-					if (Utils::IsHoldingButton(event, 0.4f))
-						Utils::ToggleSprint(true);
-					g_isSprintQueued = false;
-				}
-			}
-			else {
+			if (event->strUserEvent != "Forward" || event->value == 0.0f)
 				g_isSprintQueued = false;
-			}
 		}
-
-		if (g_isAutoMoveSprint)
-			g_isAutoMoveSprint = false;
 
 		MovementHandler_Original(arg1, event);
 	}
@@ -137,17 +122,19 @@ namespace Hooks {
 
 	RE::BSEventNotifyControl PlayerAnimGraphEvent_ReceiveEvent_Hook(void* arg1, BSAnimationGraphEvent* evn, void* dispatcher) {
 		if (evn->name == "reloadState") {
-			if (evn->args == "Enter")
+			if (evn->args == "Enter") {
 				g_reloadStackSize++;
+			}
+			else if (evn->args == "Exit") {
+				if (g_preventSprintReloading && g_isSprintQueued) {
+					g_isSprintQueued = false;
+					if (!Utils::IsSprinting())
+						Utils::ToggleSprint(true);
+				}
+			}
 		}
 		else if (evn->name == "initiateStart") {
 			g_reloadStackSize = 0;
-		}
-		else if (evn->name == "ReloadEnd") {
-			if (g_preventSprintReloading && Utils::IsAutoMove() && g_isAutoMoveSprint) {
-				g_isAutoMoveSprint = false;
-				Utils::ToggleSprint(true);
-			}
 		}
 
 		return PlayerAnimGraphEvent_ReceiveEvent_Original(arg1, evn, dispatcher);
@@ -156,7 +143,6 @@ namespace Hooks {
 	RE::BSEventNotifyControl MenuOpenCloseEvent_ReceiveEvent_Hook(void* arg1, RE::MenuOpenCloseEvent* evn, void* dispatcher) {
 		if (evn->menuName == "LoadingMenu" && evn->opening) {
 			g_isSprintQueued = false;
-			g_isAutoMoveSprint = false;
 		}
 
 		return MenuOpenCloseEvent_ReceiveEvent_Original(arg1, evn, dispatcher);

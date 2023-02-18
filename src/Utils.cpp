@@ -25,14 +25,6 @@ namespace Utils {
 		return player->GetWeaponMagicDrawn();
 	}
 
-	bool IsAutoMove() {
-		RE::PlayerControls* pCon = RE::PlayerControls::GetSingleton();
-		if (!pCon)
-			return false;
-
-		return pCon->data.autoMove;
-	}
-
 	bool IsVanityModeEnabled() {
 		RE::PlayerControls* pCon = RE::PlayerControls::GetSingleton();
 		if (!pCon)
@@ -82,11 +74,6 @@ namespace Utils {
 
 	bool IsButtonPressed(RE::ButtonEvent* a_btnEvent, float a_heldDownSecs) {
 		if (a_btnEvent->value == 0.0f && a_btnEvent->heldDownSecs < a_heldDownSecs)
-			return true;
-		return false;
-	}
-	bool IsHoldingButton(RE::ButtonEvent* a_btnEvent, float a_heldDownSecs)	{
-		if (a_btnEvent->value == 1.0f && a_btnEvent->heldDownSecs >= a_heldDownSecs)
 			return true;
 		return false;
 	}
