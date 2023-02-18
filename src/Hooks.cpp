@@ -129,7 +129,7 @@ namespace Hooks {
 		if (!behaviorGraph || !behaviorGraph->activeNodes || behaviorGraph->activeNodes->size == 0)
 			return false;
 
-		if (!behaviorGraph->activeNodes->data[0]->clipGenerator && !behaviorGraph->activeNodes->data[0]->clipGenerator->animName.data)
+		if (!behaviorGraph->activeNodes->data[0]->clipGenerator || !behaviorGraph->activeNodes->data[0]->clipGenerator->animName.data)
 			return false;
 
 		return strncmp(behaviorGraph->activeNodes->data[0]->clipGenerator->animName.data, "WPNReload", strlen("WPNReload")) == 0;
