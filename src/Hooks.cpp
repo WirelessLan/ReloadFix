@@ -10,6 +10,71 @@ namespace Hooks {
 		RE::BSFixedString args;
 	};
 
+	class BSAnimationGraphManager :
+		public RE::BSTEventSink<BSAnimationGraphEvent>,
+		public RE::BSIntrusiveRefCounted {
+	public:
+		// members
+		RE::BSTArray<RE::BSTSmartPointer<RE::BSAnimationGraphChannel>>  boundChannels;			// 10
+		RE::BSTArray<RE::BSTSmartPointer<RE::BSAnimationGraphChannel>>  bumpedChannels;			// 28
+		RE::BSTSmallArray<RE::BSTSmartPointer<RE::BShkbAnimationGraph>> thirdPersonAnimGraphs;	// 40
+		RE::BSTArray<uint64_t>											subManagers;			// 58
+		RE::BSTArray<uint64_t>											unk70;					// 70
+		RE::BSTArray<uint64_t>											unk88;					// 88
+		RE::BSTArray<uint64_t>											unkA0;					// A0
+		uint64_t														unkB8;					// B8
+		RE::BSTSmartPointer<RE::BShkbAnimationGraph>					firstPersonAnimGraph;	// C0
+	};
+
+	class hkbBehaviorGraph;
+
+	class BShkbAnimationGraph {
+	public:
+		// members
+		uint64_t						unk00;							// 000
+		RE::BSIntrusiveRefCounted		refCount;						// 008
+		RE::BSTEventSource<RE::BSTransformDeltaEvent>	deltaEvent;		// 010
+		RE::BSTEventSource<BSAnimationGraphEvent>	animGraphEvent;		// 068
+		uint64_t									unkC0[(0x378 - 0xC0) >> 3];		// 0C0
+		hkbBehaviorGraph* behaviourGraph;								// 378
+	};
+
+	template <class T>
+	class hkArray {
+	public:
+		T* data;					// 00
+		uint32_t size;				// 08
+		uint32_t capacity;			// 0C
+	};
+
+	class hkStringPtr {
+	public:
+		// members
+		const char* data;			// 00
+	};
+
+	class hkbClipGenerator {
+	public:
+		// members
+		uint64_t					unk00[0x38 >> 3];			// 00
+		hkStringPtr					animName;					// 38
+		uint64_t					unk40[(0x90 - 0x40) >> 3];	// 40
+		hkStringPtr					animPath;					// 90
+	};
+
+	class hkbBehaviorGraph {
+	public:
+		struct NodeData {
+			hkbClipGenerator* clipGenerator;
+			hkbClipGenerator* clipGenerator2;
+			hkbBehaviorGraph* behaviorGraph;
+		};
+
+		// members
+		uint64_t			unk00[0xE0 >> 3];		// 000
+		hkArray<NodeData*>* activeNodes;			// 0E0
+	};
+
 	using _ButtonEventHandler = void (*)(void*, RE::ButtonEvent*);
 	using _PlayerAnimGraphEvent_ReceiveEvent = RE::BSEventNotifyControl(*)(void*, BSAnimationGraphEvent*, void*);
 	using _MenuOpenCloseEvent_ReceiveEvent = RE::BSEventNotifyControl(*)(void*, RE::MenuOpenCloseEvent*, void*);
@@ -42,30 +107,45 @@ namespace Hooks {
 
 	REL::Relocation<float*> minCurrentZoom(REL::ID(1011622));
 
-	uint32_t g_reloadStackSize;
 	bool g_preventSprintReloading;
 	bool g_isSprintQueued;
 
 	bool IsReloading() {
-		return g_reloadStackSize > 0;
+		RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
+		if (!player || !player->currentProcess || !player->currentProcess->middleHigh || !player->currentProcess->middleHigh->animationGraphManager)
+			return false;
+
+		BSAnimationGraphManager* animGraphManager = (BSAnimationGraphManager*)player->currentProcess->middleHigh->animationGraphManager.get();
+		if ((Utils::IsFirstPerson() && !animGraphManager->firstPersonAnimGraph) || animGraphManager->thirdPersonAnimGraphs.empty())
+			return false;
+
+		BShkbAnimationGraph* animGraph = 
+			(BShkbAnimationGraph*)(Utils::IsFirstPerson() ? 
+				animGraphManager->firstPersonAnimGraph.get() : animGraphManager->thirdPersonAnimGraphs[0].get());
+		if (!animGraph)
+			return false;
+
+		hkbBehaviorGraph* behaviorGraph = animGraph->behaviourGraph;
+		if (!behaviorGraph || !behaviorGraph->activeNodes || behaviorGraph->activeNodes->size == 0)
+			return false;
+
+		if (!behaviorGraph->activeNodes->data[0]->clipGenerator && !behaviorGraph->activeNodes->data[0]->clipGenerator->animName.data)
+			return false;
+
+		return strncmp(behaviorGraph->activeNodes->data[0]->clipGenerator->animName.data, "WPNReload", strlen("WPNReload")) == 0;
 	}
 
 	void ClearVariables() {
-		g_reloadStackSize = 0;
 		g_isSprintQueued = false;
 	}
 
 	void ReadyWeaponHandler_Hook(void* arg1, RE::ButtonEvent* event) {
-		if (Utils::IsButtonPressed(event, 0.4f) && Utils::IsWeaponDrawn() && Utils::IsSprinting() && Utils::IsWeaponReloadable() && !IsReloading()) {
-			g_reloadStackSize++;
-
-			if (g_preventSprintReloading) {
-				g_isSprintQueued = true;
-				Utils::ToggleSprint(false);
-			}
-		}
-
 		ReadyWeaponHandler_Original(arg1, event);
+
+		if (g_preventSprintReloading && Utils::IsSprinting() && IsReloading()) {
+			g_isSprintQueued = true;
+			Utils::ToggleSprint(false);
+		}
 	}
 
 	void TogglePOV_Hook(void* arg1, RE::ButtonEvent* event) {
@@ -121,29 +201,20 @@ namespace Hooks {
 	}
 
 	RE::BSEventNotifyControl PlayerAnimGraphEvent_ReceiveEvent_Hook(void* arg1, BSAnimationGraphEvent* evn, void* dispatcher) {
-		if (evn->name == "reloadState") {
-			if (evn->args == "Enter") {
-				g_reloadStackSize++;
+		if (evn->name == "reloadState" && evn->args == "Exit") {
+			if (g_preventSprintReloading && g_isSprintQueued && !IsReloading()) {
+				g_isSprintQueued = false;
+				if (!Utils::IsSprinting())
+					Utils::ToggleSprint(true);
 			}
-			else if (evn->args == "Exit") {
-				if (g_preventSprintReloading && g_isSprintQueued) {
-					g_isSprintQueued = false;
-					if (!Utils::IsSprinting())
-						Utils::ToggleSprint(true);
-				}
-			}
-		}
-		else if (evn->name == "initiateStart") {
-			g_reloadStackSize = 0;
 		}
 
 		return PlayerAnimGraphEvent_ReceiveEvent_Original(arg1, evn, dispatcher);
 	}
 
 	RE::BSEventNotifyControl MenuOpenCloseEvent_ReceiveEvent_Hook(void* arg1, RE::MenuOpenCloseEvent* evn, void* dispatcher) {
-		if (evn->menuName == "LoadingMenu" && evn->opening) {
+		if (evn->menuName == "LoadingMenu" && evn->opening)
 			g_isSprintQueued = false;
-		}
 
 		return MenuOpenCloseEvent_ReceiveEvent_Original(arg1, evn, dispatcher);
 	}
