@@ -82,9 +82,6 @@ namespace Hooks {
 	REL::Relocation<uintptr_t> ReadyWeaponHandler_Target(REL::ID(549666), 0x40);
 	_ButtonEventHandler ReadyWeaponHandler_Original;
 
-	REL::Relocation<uintptr_t> TogglePOV_Target(REL::ID(1040085), 0x40);
-	_ButtonEventHandler TogglePOV_Original;
-
 	REL::Relocation<uintptr_t> TogglePOV_FirstToThird_Target(REL::ID(246953), 0x40);
 	_ButtonEventHandler TogglePOV_FirstToThird_Original;
 
@@ -148,19 +145,6 @@ namespace Hooks {
 		}
 	}
 
-	void TogglePOV_Hook(void* arg1, RE::ButtonEvent* event) {
-		if (IsReloading())
-			return;
-
-		if (Utils::IsFirstPerson() && Utils::IsWeaponDrawn()) {
-			if (!Utils::IsVanityModeEnabled())
-				Utils::ToggleVanityMode(true);
-			return;
-		}
-
-		TogglePOV_Original(arg1, event);
-	}
-
 	void TogglePOV_FirstToThird_Hook(void* arg1, RE::ButtonEvent* event) {
 		if (IsReloading())
 			return;
@@ -169,11 +153,14 @@ namespace Hooks {
 	}
 
 	void TogglePOV_ThirdToFirst_Hook(RE::ThirdPersonState* tpState, RE::ButtonEvent* event) {
-		if (IsReloading()) {
-			if (event->strUserEvent == "TogglePOV")
-				return;
+		if (event->value == 0.0f && tpState && !tpState->freeRotationEnabled)
+			tpState->freeRotation.x = 0.0f;
 
-			if (event->strUserEvent == "ZoomIn") {
+		if (IsReloading()) {
+			if (event->strUserEvent == "TogglePOV") {
+				return;
+			}
+			else if (event->strUserEvent == "ZoomIn") {
 				if (tpState && tpState->currentZoomOffset <= *minCurrentZoom)
 					return;
 			}
@@ -229,9 +216,6 @@ namespace Hooks {
 		}
 
 		if (bPreventTogglePOVDuringReload) {
-			TogglePOV_Original = *(_ButtonEventHandler*)(TogglePOV_Target.get());
-			REL::safe_write(TogglePOV_Target.address(), (uintptr_t)TogglePOV_Hook);
-
 			TogglePOV_FirstToThird_Original = *(_ButtonEventHandler*)(TogglePOV_FirstToThird_Target.get());
 			REL::safe_write(TogglePOV_FirstToThird_Target.address(), (uintptr_t)TogglePOV_FirstToThird_Hook);
 

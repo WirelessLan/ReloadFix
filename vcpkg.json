@@ -1,6 +1,6 @@
 {
   "name": "reloadfix",
-  "version-string": "1.2.1",
+  "version-string": "1.2.2",
   "homepage": "https://github.com/WirelessLan/ReloadFix",
   "license": "MIT",
   "dependencies": [
