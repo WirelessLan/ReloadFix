@@ -27,7 +27,7 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE 
 
 project(
 	ReloadFix
-	VERSION 1.2.2
+	VERSION 1.2.3
 	LANGUAGES CXX
 )
 

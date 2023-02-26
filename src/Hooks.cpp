@@ -104,7 +104,6 @@ namespace Hooks {
 
 	REL::Relocation<float*> minCurrentZoom(REL::ID(1011622));
 
-	bool g_preventSprintReloading;
 	bool g_isSprintQueued;
 
 	bool IsReloading() {
@@ -139,7 +138,7 @@ namespace Hooks {
 	void ReadyWeaponHandler_Hook(void* arg1, RE::ButtonEvent* event) {
 		ReadyWeaponHandler_Original(arg1, event);
 
-		if (g_preventSprintReloading && Utils::IsSprinting() && IsReloading()) {
+		if (Utils::IsSprinting() && IsReloading()) {
 			g_isSprintQueued = true;
 			Utils::ToggleSprint(false);
 		}
@@ -189,7 +188,7 @@ namespace Hooks {
 
 	RE::BSEventNotifyControl PlayerAnimGraphEvent_ReceiveEvent_Hook(void* arg1, BSAnimationGraphEvent* evn, void* dispatcher) {
 		if (evn->name == "reloadState" && evn->args == "Exit") {
-			if (g_preventSprintReloading && g_isSprintQueued && !IsReloading()) {
+			if (g_isSprintQueued && !IsReloading()) {
 				g_isSprintQueued = false;
 				if (!Utils::IsSprinting())
 					Utils::ToggleSprint(true);
@@ -207,14 +206,6 @@ namespace Hooks {
 	}
 
 	void Install(bool bPreventTogglePOVDuringReload, bool bPreventReloadAfterTogglePOV, bool bPreventSprintReloading) {
-		if (bPreventTogglePOVDuringReload || bPreventSprintReloading) {
-			ReadyWeaponHandler_Original = *(_ButtonEventHandler*)(ReadyWeaponHandler_Target.get());
-			REL::safe_write(ReadyWeaponHandler_Target.address(), (uintptr_t)ReadyWeaponHandler_Hook);
-
-			PlayerAnimGraphEvent_ReceiveEvent_Original = *(_PlayerAnimGraphEvent_ReceiveEvent*)(PlayerAnimGraphEvent_ReceiveEvent_Target.get());
-			REL::safe_write(PlayerAnimGraphEvent_ReceiveEvent_Target.address(), (uintptr_t)PlayerAnimGraphEvent_ReceiveEvent_Hook);
-		}
-
 		if (bPreventTogglePOVDuringReload) {
 			TogglePOV_FirstToThird_Original = *(_ButtonEventHandler*)(TogglePOV_FirstToThird_Target.get());
 			REL::safe_write(TogglePOV_FirstToThird_Target.address(), (uintptr_t)TogglePOV_FirstToThird_Hook);
@@ -224,13 +215,17 @@ namespace Hooks {
 		}
 
 		if (bPreventSprintReloading) {
-			g_preventSprintReloading = true;
+			ReadyWeaponHandler_Original = *(_ButtonEventHandler*)(ReadyWeaponHandler_Target.get());
+			REL::safe_write(ReadyWeaponHandler_Target.address(), (uintptr_t)ReadyWeaponHandler_Hook);
 
 			MovementHandler_Original = *(_ButtonEventHandler*)(MovementHandler_Target.get());
 			REL::safe_write(MovementHandler_Target.address(), (uintptr_t)MovementHandler_Hook);
 
 			SprintHandler_Original = *(_ButtonEventHandler*)(SprintHandler_Target.get());
 			REL::safe_write(SprintHandler_Target.address(), (uintptr_t)SprintHandler_Hook);
+
+			PlayerAnimGraphEvent_ReceiveEvent_Original = *(_PlayerAnimGraphEvent_ReceiveEvent*)(PlayerAnimGraphEvent_ReceiveEvent_Target.get());
+			REL::safe_write(PlayerAnimGraphEvent_ReceiveEvent_Target.address(), (uintptr_t)PlayerAnimGraphEvent_ReceiveEvent_Hook);
 
 			MenuOpenCloseEvent_ReceiveEvent_Original = *(_MenuOpenCloseEvent_ReceiveEvent*)(MenuOpenCloseEvent_ReceiveEvent_Target.get());
 			REL::safe_write(MenuOpenCloseEvent_ReceiveEvent_Target.address(), (uintptr_t)MenuOpenCloseEvent_ReceiveEvent_Hook);
