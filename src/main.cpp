@@ -16,19 +16,33 @@ std::string GetINIOption(const char* section, const char* key) {
 }
 
 void ReadINI() {
-	std::string bPreventTogglePOVDuringReload_value = GetINIOption("Settings", "bPreventTogglePOVDuringReload");
-	if (!bPreventTogglePOVDuringReload_value.empty())
-		bPreventTogglePOVDuringReload = std::stoul(bPreventTogglePOVDuringReload_value);
+	std::string value;
+	
+	value = GetINIOption("Settings", "bPreventTogglePOVDuringReload");
+	if (!value.empty()) {
+		try {
+			bPreventTogglePOVDuringReload = std::stoul(value);
+		}
+		catch (...) {}
+	}
 	logger::info(FMT_STRING("bPreventTogglePOVDuringReload: {}"), bPreventTogglePOVDuringReload);
 
-	std::string bPreventReloadAfterTogglePOV_value = GetINIOption("Settings", "bPreventReloadAfterTogglePOV");
-	if (!bPreventReloadAfterTogglePOV_value.empty())
-		bPreventReloadAfterTogglePOV = std::stoul(bPreventReloadAfterTogglePOV_value);
+	value = GetINIOption("Settings", "bPreventReloadAfterTogglePOV");
+	if (!value.empty()) {
+		try {
+			bPreventReloadAfterTogglePOV = std::stoul(value);
+		}
+		catch (...) {}
+	}
 	logger::info(FMT_STRING("bPreventReloadAfterTogglePOV: {}"), bPreventReloadAfterTogglePOV);
 
-	std::string bPreventSprintReloading_value = GetINIOption("Settings", "bPreventSprintReloading");
-	if (!bPreventSprintReloading_value.empty())
-		bPreventSprintReloading = std::stoul(bPreventSprintReloading_value);
+	value = GetINIOption("Settings", "bPreventSprintReloading");
+	if (!value.empty()) {
+		try {
+			bPreventSprintReloading = std::stoul(value);
+		}
+		catch (...) {}
+	}
 	logger::info(FMT_STRING("bPreventSprintReloading: {}"), bPreventSprintReloading);
 }
 

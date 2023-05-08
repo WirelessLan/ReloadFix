@@ -26,19 +26,6 @@ namespace Hooks {
 		RE::BSTSmartPointer<RE::BShkbAnimationGraph>					firstPersonAnimGraph;	// C0
 	};
 
-	class hkbBehaviorGraph;
-
-	class BShkbAnimationGraph {
-	public:
-		// members
-		uint64_t						unk00;							// 000
-		RE::BSIntrusiveRefCounted		refCount;						// 008
-		RE::BSTEventSource<RE::BSTransformDeltaEvent>	deltaEvent;		// 010
-		RE::BSTEventSource<BSAnimationGraphEvent>	animGraphEvent;		// 068
-		uint64_t									unkC0[(0x378 - 0xC0) >> 3];		// 0C0
-		hkbBehaviorGraph* behaviourGraph;								// 378
-	};
-
 	template <class T>
 	class hkArray {
 	public:
@@ -75,49 +62,31 @@ namespace Hooks {
 		hkArray<NodeData*>* activeNodes;			// 0E0
 	};
 
-	using _ButtonEventHandler = void (*)(void*, RE::ButtonEvent*);
-	using _PlayerAnimGraphEvent_ReceiveEvent = RE::BSEventNotifyControl(*)(void*, BSAnimationGraphEvent*, void*);
-	using _MenuOpenCloseEvent_ReceiveEvent = RE::BSEventNotifyControl(*)(void*, RE::MenuOpenCloseEvent*, void*);
-
-	REL::Relocation<uintptr_t> ReadyWeaponHandler_Target(REL::ID(549666), 0x40);
-	_ButtonEventHandler ReadyWeaponHandler_Original;
-
-	REL::Relocation<uintptr_t> TogglePOV_FirstToThird_Target(REL::ID(246953), 0x40);
-	_ButtonEventHandler TogglePOV_FirstToThird_Original;
-
-	REL::Relocation<uintptr_t> TogglePOV_ThirdToFirst_Target(REL::ID(728085), 0x40);
-	_ButtonEventHandler TogglePOV_ThirdToFirst_Original;
-
-	REL::Relocation<uintptr_t> MovementHandler_Target(REL::ID(577025), 0x40);
-	_ButtonEventHandler MovementHandler_Original;
-
-	REL::Relocation<uintptr_t> SprintHandler_Target(REL::ID(1095200), 0x40);
-	_ButtonEventHandler SprintHandler_Original;
-
-	REL::Relocation<uintptr_t> PlayerAnimGraphEvent_ReceiveEvent_Target(REL::ID(1542933), 0x8);
-	_PlayerAnimGraphEvent_ReceiveEvent PlayerAnimGraphEvent_ReceiveEvent_Original;
-
-	REL::Relocation<uintptr_t> MenuOpenCloseEvent_ReceiveEvent_Target(REL::ID(267421), 0x08);
-	_MenuOpenCloseEvent_ReceiveEvent MenuOpenCloseEvent_ReceiveEvent_Original;
-
-	REL::Relocation<uintptr_t> ShouldRestartReloading_Target(REL::ID(601228), 0x446);
-
-	REL::Relocation<float*> minCurrentZoom(REL::ID(1011622));
-
-	bool g_isSprintQueued;
+	class BShkbAnimationGraph {
+	public:
+		// members
+		uint64_t						unk00;							// 000
+		RE::BSIntrusiveRefCounted		refCount;						// 008
+		RE::BSTEventSource<RE::BSTransformDeltaEvent>	deltaEvent;		// 010
+		RE::BSTEventSource<BSAnimationGraphEvent>	animGraphEvent;		// 068
+		uint64_t									unkC0[(0x378 - 0xC0) >> 3];		// 0C0
+		hkbBehaviorGraph* behaviourGraph;								// 378
+	};
 
 	bool IsReloading() {
+		if (!Utils::IsWeaponDrawn())
+			return false;
+
 		RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
 		if (!player || !player->currentProcess || !player->currentProcess->middleHigh || !player->currentProcess->middleHigh->animationGraphManager)
 			return false;
 
+		bool isFirstPerson = Utils::IsFirstPerson();
 		BSAnimationGraphManager* animGraphManager = (BSAnimationGraphManager*)player->currentProcess->middleHigh->animationGraphManager.get();
-		if ((Utils::IsFirstPerson() && !animGraphManager->firstPersonAnimGraph) || animGraphManager->thirdPersonAnimGraphs.empty())
+		if ((isFirstPerson && !animGraphManager->firstPersonAnimGraph) || animGraphManager->thirdPersonAnimGraphs.empty())
 			return false;
 
-		BShkbAnimationGraph* animGraph = 
-			(BShkbAnimationGraph*)(Utils::IsFirstPerson() ? 
-				animGraphManager->firstPersonAnimGraph.get() : animGraphManager->thirdPersonAnimGraphs[0].get());
+		BShkbAnimationGraph* animGraph = (BShkbAnimationGraph*)(isFirstPerson ?	animGraphManager->firstPersonAnimGraph.get() : animGraphManager->thirdPersonAnimGraphs[0].get());
 		if (!animGraph)
 			return false;
 
@@ -125,117 +94,212 @@ namespace Hooks {
 		if (!behaviorGraph || !behaviorGraph->activeNodes || behaviorGraph->activeNodes->size == 0)
 			return false;
 
-		if (!behaviorGraph->activeNodes->data[0]->clipGenerator || !behaviorGraph->activeNodes->data[0]->clipGenerator->animName.data)
-			return false;
+		for (std::uint32_t ii = 0; ii < behaviorGraph->activeNodes->size; ii++) {
+			if (!behaviorGraph->activeNodes->data[ii]->clipGenerator || !behaviorGraph->activeNodes->data[ii]->clipGenerator->animName.data)
+				continue;
 
-		return strncmp(behaviorGraph->activeNodes->data[0]->clipGenerator->animName.data, "WPNReload", strlen("WPNReload")) == 0;
+			if (strncmp(behaviorGraph->activeNodes->data[ii]->clipGenerator->animName.data, "WPNReload", strlen("WPNReload")) == 0)
+				return true;
+		}
+
+		return false;
 	}
+
+	bool g_isSprintQueued = false;
 
 	void ClearVariables() {
 		g_isSprintQueued = false;
 	}
 
-	void ReadyWeaponHandler_Hook(void* arg1, RE::ButtonEvent* event) {
-		ReadyWeaponHandler_Original(arg1, event);
-
-		if (Utils::IsSprinting() && IsReloading()) {
-			g_isSprintQueued = true;
-			Utils::ToggleSprint(false);
+	template<std::uint64_t id, std::ptrdiff_t diff>
+	class TogglePOV_FirstToThirdHook {
+	public:
+		static void Install() {
+			REL::Relocation<std::uintptr_t> target(REL::ID(id), diff);
+			origFunc = *(func_t*)(target.get());
+			REL::safe_write(target.get(), (std::uintptr_t)ProcessHook);
 		}
-	}
+	private:
+		using func_t = void (*)(void*, RE::ButtonEvent*);
 
-	void TogglePOV_FirstToThird_Hook(void* arg1, RE::ButtonEvent* event) {
-		if (IsReloading())
-			return;
+		static void ProcessHook(void* arg1, RE::ButtonEvent* a_event) {
+			if (IsReloading())
+				return;
 
-		TogglePOV_FirstToThird_Original(arg1, event);
-	}
+			origFunc(arg1, a_event);
+		}
 
-	void TogglePOV_ThirdToFirst_Hook(RE::ThirdPersonState* tpState, RE::ButtonEvent* event) {
-		if (event->value == 0.0f && tpState && !tpState->freeRotationEnabled)
-			tpState->freeRotation.x = 0.0f;
+		inline static func_t origFunc;
+	};
 
-		if (IsReloading()) {
-			if (event->strUserEvent == "TogglePOV") {
+	template<std::uint64_t id, std::uint64_t minCurrentZoom_id, std::ptrdiff_t diff>
+	class TogglePOV_ThirdToFirstHook {
+	public:
+		static void Install() {
+			REL::Relocation<std::uintptr_t> target(REL::ID(id), diff);
+			origFunc = *(func_t*)(target.get());
+			REL::safe_write(target.get(), (std::uintptr_t)ProcessHook);
+		}
+	private:
+		using func_t = void (*)(RE::ThirdPersonState*, RE::ButtonEvent*);
+
+		static void ProcessHook(RE::ThirdPersonState* a_tpState, RE::ButtonEvent* a_event) {
+			if (a_event->value == 0.0f && a_tpState && !a_tpState->freeRotationEnabled)
+				a_tpState->freeRotation.x = 0.0f;
+
+			if (IsReloading()) {
+				if (a_event->strUserEvent == "TogglePOV") {
+					return;
+				}
+				else if (a_event->strUserEvent == "ZoomIn") {
+					float minCurrentZoom = *REL::Relocation<float*>(REL::ID(minCurrentZoom_id));
+					if (a_tpState && a_tpState->currentZoomOffset <= minCurrentZoom)
+						return;
+				}
+			}
+
+			origFunc(a_tpState, a_event);
+		}
+
+		inline static func_t origFunc;
+	};
+
+	template<std::uint64_t id, std::ptrdiff_t diff>
+	class ReadyWeaponHandlerHook {
+	public:
+		static void Install() {
+			REL::Relocation<std::uintptr_t> target(REL::ID(id), diff);
+			origFunc = *(func_t*)(target.get());
+			REL::safe_write(target.get(), (std::uintptr_t)ProcessHook);
+		}
+	private:
+		using func_t = void (*)(void*, RE::ButtonEvent*);
+
+		static void ProcessHook(void* arg1, RE::ButtonEvent* a_event) {
+			origFunc(arg1, a_event);
+
+			if (Utils::IsSprinting() && IsReloading()) {
+				g_isSprintQueued = true;
+				Utils::ToggleSprint(false);
+			}
+		}
+
+		inline static func_t origFunc;
+	};
+
+	template<std::uint64_t id, std::ptrdiff_t diff>
+	class MovementHandlerHook {
+	public:
+		static void Install() {
+			REL::Relocation<std::uintptr_t> target(REL::ID(id), diff);
+			origFunc = *(func_t*)(target.get());
+			REL::safe_write(target.get(), (std::uintptr_t)ProcessHook);
+		}
+	private:
+		using func_t = void (*)(void*, RE::ButtonEvent*);
+
+		static void ProcessHook(void* arg1, RE::ButtonEvent* a_event) {
+			if (g_isSprintQueued) {
+				if (a_event->strUserEvent != "Forward" || a_event->value == 0.0f)
+					g_isSprintQueued = false;
+			}
+
+			origFunc(arg1, a_event);
+		}
+
+		inline static func_t origFunc;
+	};
+
+	template<std::uint64_t id, std::ptrdiff_t diff>
+	class SprintHandlerHook {
+	public:
+		static void Install() {
+			REL::Relocation<std::uintptr_t> target(REL::ID(id), diff);
+			origFunc = *(func_t*)(target.get());
+			REL::safe_write(target.get(), (std::uintptr_t)ProcessHook);
+		}
+	private:
+		using func_t = void (*)(void*, RE::ButtonEvent*);
+
+		static void ProcessHook(void* arg1, RE::ButtonEvent* a_event) {
+			if (IsReloading()) {
+				g_isSprintQueued = true;
 				return;
 			}
-			else if (event->strUserEvent == "ZoomIn") {
-				if (tpState && tpState->currentZoomOffset <= *minCurrentZoom)
-					return;
+
+			origFunc(arg1, a_event);
+		}
+
+		inline static func_t origFunc;
+	};
+
+	template<std::uint64_t id, std::ptrdiff_t diff>
+	class BSAnimationGraphEvent_ProcessEventHook {
+	public:
+		static void Install() {
+			REL::Relocation<std::uintptr_t> target(REL::ID(id), diff);
+			origFunc = *(func_t*)(target.get());
+			REL::safe_write(target.get(), (std::uintptr_t)ProcessHook);
+		}
+	private:
+		using func_t = RE::BSEventNotifyControl(*)(void*, BSAnimationGraphEvent*, void*);
+
+		static RE::BSEventNotifyControl ProcessHook(void* arg1, BSAnimationGraphEvent* a_event, void* a_dispatcher) {
+			if (a_event->name == "reloadState" && a_event->args == "Exit") {
+				if (g_isSprintQueued && !IsReloading()) {
+					g_isSprintQueued = false;
+					if (!Utils::IsSprinting())
+						Utils::ToggleSprint(true);
+				}
 			}
+
+			return origFunc(arg1, a_event, a_dispatcher);
 		}
 
-		TogglePOV_ThirdToFirst_Original(tpState, event);
-	}
+		inline static func_t origFunc;
+	};
 
-	void MovementHandler_Hook(void* arg1, RE::ButtonEvent* event) {
-		if (g_isSprintQueued) {
-			if (event->strUserEvent != "Forward" || event->value == 0.0f)
+	template<std::uint64_t id, std::ptrdiff_t diff>
+	class MenuOpenCloseEvent_ProcessEventHook {
+	public:
+		static void Install() {
+			REL::Relocation<std::uintptr_t> target(REL::ID(id), diff);
+			origFunc = *(func_t*)(target.get());
+			REL::safe_write(target.get(), (std::uintptr_t)ProcessHook);
+		}
+	private:
+		using func_t = RE::BSEventNotifyControl(*)(void*, RE::MenuOpenCloseEvent*, void*);
+
+		static RE::BSEventNotifyControl ProcessHook(void* arg1, RE::MenuOpenCloseEvent* a_event, void* a_dispatcher) {
+			if (a_event->menuName == "LoadingMenu" && a_event->opening)
 				g_isSprintQueued = false;
+
+			return origFunc(arg1, a_event, a_dispatcher);
 		}
 
-		MovementHandler_Original(arg1, event);
-	}
-
-	void SprintHandler_Hook(void* arg1, RE::ButtonEvent* event) {
-		if (IsReloading()) {
-			g_isSprintQueued = true;
-			return;
-		}
-
-		SprintHandler_Original(arg1, event);
-	}
-
-	RE::BSEventNotifyControl PlayerAnimGraphEvent_ReceiveEvent_Hook(void* arg1, BSAnimationGraphEvent* evn, void* dispatcher) {
-		if (evn->name == "reloadState" && evn->args == "Exit") {
-			if (g_isSprintQueued && !IsReloading()) {
-				g_isSprintQueued = false;
-				if (!Utils::IsSprinting())
-					Utils::ToggleSprint(true);
-			}
-		}
-
-		return PlayerAnimGraphEvent_ReceiveEvent_Original(arg1, evn, dispatcher);
-	}
-
-	RE::BSEventNotifyControl MenuOpenCloseEvent_ReceiveEvent_Hook(void* arg1, RE::MenuOpenCloseEvent* evn, void* dispatcher) {
-		if (evn->menuName == "LoadingMenu" && evn->opening)
-			g_isSprintQueued = false;
-
-		return MenuOpenCloseEvent_ReceiveEvent_Original(arg1, evn, dispatcher);
-	}
+		inline static func_t origFunc;
+	};
 
 	void Install(bool bPreventTogglePOVDuringReload, bool bPreventReloadAfterTogglePOV, bool bPreventSprintReloading) {
 		if (bPreventTogglePOVDuringReload) {
-			TogglePOV_FirstToThird_Original = *(_ButtonEventHandler*)(TogglePOV_FirstToThird_Target.get());
-			REL::safe_write(TogglePOV_FirstToThird_Target.address(), (uintptr_t)TogglePOV_FirstToThird_Hook);
-
-			TogglePOV_ThirdToFirst_Original = *(_ButtonEventHandler*)(TogglePOV_ThirdToFirst_Target.get());
-			REL::safe_write(TogglePOV_ThirdToFirst_Target.address(), (uintptr_t)TogglePOV_ThirdToFirst_Hook);
+			TogglePOV_FirstToThirdHook<246953, 0x40>::Install();
+			TogglePOV_ThirdToFirstHook<728085, 1011622, 0x40>::Install();
 		}
 
 		if (bPreventSprintReloading) {
-			ReadyWeaponHandler_Original = *(_ButtonEventHandler*)(ReadyWeaponHandler_Target.get());
-			REL::safe_write(ReadyWeaponHandler_Target.address(), (uintptr_t)ReadyWeaponHandler_Hook);
-
-			MovementHandler_Original = *(_ButtonEventHandler*)(MovementHandler_Target.get());
-			REL::safe_write(MovementHandler_Target.address(), (uintptr_t)MovementHandler_Hook);
-
-			SprintHandler_Original = *(_ButtonEventHandler*)(SprintHandler_Target.get());
-			REL::safe_write(SprintHandler_Target.address(), (uintptr_t)SprintHandler_Hook);
-
-			PlayerAnimGraphEvent_ReceiveEvent_Original = *(_PlayerAnimGraphEvent_ReceiveEvent*)(PlayerAnimGraphEvent_ReceiveEvent_Target.get());
-			REL::safe_write(PlayerAnimGraphEvent_ReceiveEvent_Target.address(), (uintptr_t)PlayerAnimGraphEvent_ReceiveEvent_Hook);
-
-			MenuOpenCloseEvent_ReceiveEvent_Original = *(_MenuOpenCloseEvent_ReceiveEvent*)(MenuOpenCloseEvent_ReceiveEvent_Target.get());
-			REL::safe_write(MenuOpenCloseEvent_ReceiveEvent_Target.address(), (uintptr_t)MenuOpenCloseEvent_ReceiveEvent_Hook);
+			ReadyWeaponHandlerHook<549666, 0x40>::Install();
+			MovementHandlerHook<577025, 0x40>::Install();
+			SprintHandlerHook<1095200, 0x40>::Install();
+			BSAnimationGraphEvent_ProcessEventHook<1542933, 0x08>::Install();
+			MenuOpenCloseEvent_ProcessEventHook<267421, 0x08>::Install();
 		}
 
 		if (bPreventReloadAfterTogglePOV) {
 			// xor dil, dil;
 			// nop;
 			uint8_t buf[] = { 0x40, 0x30, 0xFF, 0x90 };
-			REL::safe_write(ShouldRestartReloading_Target.address(), buf, sizeof(buf));
+			REL::Relocation<uintptr_t> target(REL::ID(601228), 0x446);
+			REL::safe_write(target.get(), buf, sizeof(buf));
 		}
 	}
 }
