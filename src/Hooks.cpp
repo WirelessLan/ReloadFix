@@ -52,9 +52,9 @@ namespace Hooks {
 	class hkbBehaviorGraph {
 	public:
 		struct NodeData {
-			hkbClipGenerator* clipGenerator;
-			hkbClipGenerator* clipGenerator2;
-			hkbBehaviorGraph* behaviorGraph;
+			hkbClipGenerator* clipGenerator;		// 00
+			hkbClipGenerator* clipGenerator2;		// 08
+			hkbBehaviorGraph* behaviorGraph;		// 10
 		};
 
 		// members
@@ -246,10 +246,9 @@ namespace Hooks {
 
 		static RE::BSEventNotifyControl ProcessHook(void* arg1, BSAnimationGraphEvent* a_event, void* a_dispatcher) {
 			if (a_event->name == "reloadState" && a_event->args == "Exit") {
-				if (g_isSprintQueued && !IsReloading()) {
+				if (g_isSprintQueued) {
+					Utils::ToggleSprint(true);
 					g_isSprintQueued = false;
-					if (!Utils::IsSprinting())
-						Utils::ToggleSprint(true);
 				}
 			}
 
