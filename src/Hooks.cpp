@@ -86,7 +86,7 @@ namespace Hooks {
 		if ((isFirstPerson && !animGraphManager->firstPersonAnimGraph) || animGraphManager->thirdPersonAnimGraphs.empty())
 			return false;
 
-		BShkbAnimationGraph* animGraph = (BShkbAnimationGraph*)(isFirstPerson ?	animGraphManager->firstPersonAnimGraph.get() : animGraphManager->thirdPersonAnimGraphs[0].get());
+		BShkbAnimationGraph* animGraph = (BShkbAnimationGraph*)(isFirstPerson ? animGraphManager->firstPersonAnimGraph.get() : animGraphManager->thirdPersonAnimGraphs[0].get());
 		if (!animGraph)
 			return false;
 
@@ -94,15 +94,19 @@ namespace Hooks {
 		if (!behaviorGraph || !behaviorGraph->activeNodes || behaviorGraph->activeNodes->size == 0)
 			return false;
 
+		bool wpnReload = false;
 		for (std::uint32_t ii = 0; ii < behaviorGraph->activeNodes->size; ii++) {
 			if (!behaviorGraph->activeNodes->data[ii]->clipGenerator || !behaviorGraph->activeNodes->data[ii]->clipGenerator->animName.data)
 				continue;
 
 			if (strncmp(behaviorGraph->activeNodes->data[ii]->clipGenerator->animName.data, "WPNReload", strlen("WPNReload")) == 0)
-				return true;
+				wpnReload = true;
+
+			if (strncmp(behaviorGraph->activeNodes->data[ii]->clipGenerator->animName.data, "ReloadEndBlend", strlen("ReloadEndBlend")) == 0)
+				return false;
 		}
 
-		return false;
+		return wpnReload;
 	}
 
 	bool g_isSprintQueued = false;
