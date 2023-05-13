@@ -18,11 +18,11 @@ namespace Hooks {
 		RE::BSTArray<RE::BSTSmartPointer<RE::BSAnimationGraphChannel>>  boundChannels;			// 10
 		RE::BSTArray<RE::BSTSmartPointer<RE::BSAnimationGraphChannel>>  bumpedChannels;			// 28
 		RE::BSTSmallArray<RE::BSTSmartPointer<RE::BShkbAnimationGraph>> thirdPersonAnimGraphs;	// 40
-		RE::BSTArray<uint64_t>											subManagers;			// 58
-		RE::BSTArray<uint64_t>											unk70;					// 70
-		RE::BSTArray<uint64_t>											unk88;					// 88
-		RE::BSTArray<uint64_t>											unkA0;					// A0
-		uint64_t														unkB8;					// B8
+		RE::BSTArray<std::uint64_t>										subManagers;			// 58
+		RE::BSTArray<std::uint64_t>										unk70;					// 70
+		RE::BSTArray<std::uint64_t>										unk88;					// 88
+		RE::BSTArray<std::uint64_t>										unkA0;					// A0
+		std::uint64_t													unkB8;					// B8
 		RE::BSTSmartPointer<RE::BShkbAnimationGraph>					firstPersonAnimGraph;	// C0
 	};
 
@@ -30,8 +30,8 @@ namespace Hooks {
 	class hkArray {
 	public:
 		T* data;					// 00
-		uint32_t size;				// 08
-		uint32_t capacity;			// 0C
+		std::uint32_t size;			// 08
+		std::uint32_t capacity;		// 0C
 	};
 
 	class hkStringPtr {
@@ -43,9 +43,9 @@ namespace Hooks {
 	class hkbClipGenerator {
 	public:
 		// members
-		uint64_t					unk00[0x38 >> 3];			// 00
+		std::uint64_t				unk00[0x38 >> 3];			// 00
 		hkStringPtr					animName;					// 38
-		uint64_t					unk40[(0x90 - 0x40) >> 3];	// 40
+		std::uint64_t				unk40[(0x90 - 0x40) >> 3];	// 40
 		hkStringPtr					animPath;					// 90
 	};
 
@@ -58,19 +58,26 @@ namespace Hooks {
 		};
 
 		// members
-		uint64_t			unk00[0xE0 >> 3];		// 000
-		hkArray<NodeData*>* activeNodes;			// 0E0
+		std::uint64_t		unk00[0xE0 >> 3];				// 000
+		hkArray<NodeData*>* activeNodes;					// 0E0
+		std::uint64_t		unkE8[(0x1A8 - 0xE8) >> 3];		// 0E8
+		std::uint8_t		unk1A8;							// 1A8
+		std::uint8_t		unk1A9;							// 1A9
+		bool				isActive;						// 1AA
+		bool				isLinked;						// 1AB
+		bool				updateActiveNodes;				// 1AC
+		bool				stateOrTransitionChanged;		// 1AD
 	};
 
 	class BShkbAnimationGraph {
 	public:
 		// members
-		uint64_t						unk00;							// 000
+		std::uint64_t					unk00;							// 000
 		RE::BSIntrusiveRefCounted		refCount;						// 008
 		RE::BSTEventSource<RE::BSTransformDeltaEvent>	deltaEvent;		// 010
 		RE::BSTEventSource<BSAnimationGraphEvent>	animGraphEvent;		// 068
-		uint64_t									unkC0[(0x378 - 0xC0) >> 3];		// 0C0
-		hkbBehaviorGraph* behaviourGraph;								// 378
+		std::uint64_t					unkC0[(0x378 - 0xC0) >> 3];		// 0C0
+		hkbBehaviorGraph*				behaviourGraph;					// 378
 	};
 
 	bool IsReloading() {
@@ -92,6 +99,9 @@ namespace Hooks {
 
 		hkbBehaviorGraph* behaviorGraph = animGraph->behaviourGraph;
 		if (!behaviorGraph || !behaviorGraph->activeNodes || behaviorGraph->activeNodes->size == 0)
+			return false;
+
+		if (behaviorGraph->updateActiveNodes || behaviorGraph->stateOrTransitionChanged)
 			return false;
 
 		bool wpnReload = false;
